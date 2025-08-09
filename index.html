@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Snake — Canvas Game</title>
+  <style>
+    :root{--bg:#0b1220;--grid:#111827;--snake:#00e676;--apple:#ff3b30;--panel:#0f1724}
+    
+    html,body{
+      height:100%;
+      margin:0;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;
+      background:var(--bg);color:#e6eef8
+    }
+    
+    .wrap{
+      min-height:100%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:24px;padding:24px;
+      box-sizing:border-box
+    }
+    
+    canvas{
+      background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));
+      border-radius:12px;
+      box-shadow:0 8px 30px rgba(2,6,23,0.6)
+    }
+    
+    .panel{
+      width:260px;
+      background:var(--panel);padding:16px;
+      border-radius:12px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.02)}
+    
+    h1{
+      margin:0 0 8px;
+      font-size:20px
+    }
+    .row{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin:8px 0
+    }
+    button{
+      background:#111827;
+      border:1px solid rgba(255,255,255,0.03);
+      color:#e6eef8;
+      padding:8px 12px;border-radius:8px;
+      cursor:pointer
+    }
+    button.small{
+      padding:6px 8px;
+      font-size:13px
+    }
+    .hint{
+      font-size:12px;
+      color:rgba(255,255,255,0.6)
+    }
+    .controls{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap
+    }
+    footer{
+      font-size:12px;
+      color:rgba(255,255,255,0.5);
+      margin-top:8px
+    }
+    @media(max-width:720px)
+    {
+      .wrap{
+        flex-direction:column
+      }
+      .panel{
+        width:100%;max-width:420px
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <canvas id="c" width="600" height="600"></canvas>
+
+    <div class="panel">
+      <h1>Snake — Apple Muncher</h1>
+      <div class="row"><div>Score</div><div id="score">0</div></div>
+      <div class="row"><div>Speed</div><div id="speedLabel">6</div></div>
+
+      <div class="row controls">
+        <button id="start">Start</button>
+        <button id="pause" class="small">Pause</button>
+        <button id="reset" class="small">Reset</button>
+      </div>
+
+      <div style="margin-top:12px">
+        <div class="hint">Controls: Arrow keys or WASD. Press R to restart.</div>
+        <div class="hint">Eat apples to grow. Don't hit walls or yourself.</div>
+      </div>
+
+      <footer>Made with ❤️ by MUFAZ-VK — press Space to pause/play</footer>
+    </div>
+  </div>
+
+  <script>
+   
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const speedLabel = document.getElementById('speedLabel');
+    const startBtn = document.getElementById('start');
+    const pauseBtn = document.getElementById('pause');
+    const resetBtn = document.getElementById('reset');
+
+   
+    const TILE = 20; 
+    const COLS = Math.floor(canvas.width / TILE);
+    const ROWS = Math.floor(canvas.height / TILE);
+
+    let speed = 6; 
+    let tickInterval = 1000 / speed;
+
+    let snake; 
+    let dir;   
+    let apple;
+    let lastTick = 0;
+    let running = false;
+    let gameOver = false;
+    let score = 0;
+
+    function reset() {
+      snake = [{x: Math.floor(COLS/2), y: Math.floor(ROWS/2)}];
+      dir = {x:1,y:0};
+      placeApple();
+      score = 0;
+      gameOver = false;
+      running = false;
+      updateUI();
+      draw();
+    }
+
+    function placeApple(){
+      let tries = 0;
+      while(true){
+        const x = Math.floor(Math.random()*COLS);
+        const y = Math.floor(Math.random()*ROWS);
+        if(!snake.some(s=>s.x===x && s.y===y)){ apple = {x,y}; break; }
+        if(++tries>1000) break;
+      }
+    }
+
+    function updateUI(){
+      scoreEl.textContent = score;
+      speedLabel.textContent = speed;
+      pauseBtn.textContent = running? 'Pause':'Play';
+    }
+
+    function changeDirection(nx, ny){
+      if(snake.length>1 && nx === -dir.x && ny === -dir.y) return;
+      dir = {x:nx,y:ny};
+    }
+
+    function step(){
+      if(gameOver || !running) return;
+      const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
+
+      if(head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS){
+        endGame();
+        return;
+      }
+
+      if(snake.some(s => s.x===head.x && s.y===head.y)){
+        endGame();
+        return;
+      }
+
+      snake.unshift(head);
+
+      if(head.x === apple.x && head.y === apple.y){
+        score += 10;
+        placeApple();
+       
+        if(score % 50 === 0){ speed = Math.min(18, speed+1); tickInterval = 1000/speed; }
+      } else {
+        snake.pop();
+      }
+
+      updateUI();
+    }
+
+    function endGame(){
+      gameOver = true;
+      running = false;
+      updateUI();
+      
+      draw();
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(0, canvas.height/2 - 40, canvas.width, 90);
+      ctx.fillStyle = '#fff';
+      ctx.font = '36px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText('Game Over', canvas.width/2, canvas.height/2 + 4);
+      ctx.font = '16px system-ui';
+      ctx.fillText('Press R to restart', canvas.width/2, canvas.height/2 + 32);
+    }
+
+    function drawGrid(){
+      ctx.fillStyle = '#071021';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      
+      ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+      ctx.lineWidth = 1;
+      for(let x=0;x<=COLS;x++){
+        ctx.beginPath(); ctx.moveTo(x*TILE,0); ctx.lineTo(x*TILE,canvas.height); ctx.stroke();
+      }
+      for(let y=0;y<=ROWS;y++){
+        ctx.beginPath(); ctx.moveTo(0,y*TILE); ctx.lineTo(canvas.width,y*TILE); ctx.stroke();
+      }
+    }
+
+    function draw(){
+      drawGrid();
+
+    
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--apple') || '#ff3b30';
+      ctx.beginPath();
+      const ax = apple.x * TILE + TILE/2;
+      const ay = apple.y * TILE + TILE/2;
+      ctx.arc(ax, ay, TILE*0.4, 0, Math.PI*2);
+      ctx.fill();
+     
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      ctx.beginPath(); ctx.arc(ax - TILE*0.12, ay - TILE*0.16, TILE*0.12, 0, Math.PI*2); ctx.fill();
+   
+      for(let i=0;i<snake.length;i++){
+        const s = snake[i];
+        const x = s.x*TILE; const y = s.y*TILE;
+        if(i===0){
+         
+          ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--snake') || '#00e676';
+          ctx.fillRect(x+1,y+1,TILE-2,TILE-2);
+         
+          ctx.fillStyle = '#07221a';
+          ctx.fillRect(x + (dir.x>0? TILE*0.6 : dir.x<0? TILE*0.12 : TILE*0.4), y + (dir.y>0? TILE*0.6 : dir.y<0? TILE*0.12 : TILE*0.4), TILE*0.12, TILE*0.12);
+        } else {
+         
+          const t = 1 - (i / Math.max(8, snake.length));
+          ctx.fillStyle = `rgba(0,230,118,${0.35 + 0.65*t})`;
+          ctx.fillRect(x+1,y+1,TILE-2,TILE-2);
+        }
+      }
+
+      if(!running && !gameOver){
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fillRect(0, canvas.height/2 - 24, canvas.width, 48);
+        ctx.fillStyle = '#fff'; ctx.font='18px system-ui'; ctx.textAlign='center';
+        ctx.fillText('Press Start or Arrow keys to play', canvas.width/2, canvas.height/2 + 6);
+      }
+    }
+
+   
+    function loop(ts){
+      if(!lastTick) lastTick = ts;
+      const elapsed = ts - lastTick;
+      if(elapsed >= tickInterval){
+        step();
+        lastTick = ts - (elapsed % tickInterval);
+      }
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+   
+    window.addEventListener('keydown', e => {
+      if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','a','s','d','W','A','S','D'].includes(e.key)){
+        running = true;
+      }
+      switch(e.key){
+        case 'ArrowUp': case 'w': case 'W': changeDirection(0,-1); break;
+        case 'ArrowDown': case 's': case 'S': changeDirection(0,1); break;
+        case 'ArrowLeft': case 'a': case 'A': changeDirection(-1,0); break;
+        case 'ArrowRight': case 'd': case 'D': changeDirection(1,0); break;
+        case ' ': running = !running; updateUI(); break;
+        case 'r': case 'R': reset(); startGame(); break;
+        case 'p': case 'P': running = !running; updateUI(); break;
+      }
+    });
+
+    
+    (function touchControls(){
+      let startX=0, startY=0;
+      canvas.addEventListener('touchstart', e=>{
+        const t = e.touches[0]; startX = t.clientX; startY = t.clientY; e.preventDefault();
+      }, {passive:false});
+      canvas.addEventListener('touchend', e=>{
+        const t = e.changedTouches[0]; const dx = t.clientX - startX; const dy = t.clientY - startY;
+        if(Math.abs(dx) > Math.abs(dy)){
+          if(dx>20) changeDirection(1,0); else if(dx<-20) changeDirection(-1,0);
+        } else {
+          if(dy>20) changeDirection(0,1); else if(dy<-20) changeDirection(0,-1);
+        }
+        running = true;
+      });
+    })();
+
+    
+    startBtn.addEventListener('click', ()=>{ running = true; updateUI(); });
+    pauseBtn.addEventListener('click', ()=>{ running = !running; updateUI(); });
+    resetBtn.addEventListener('click', ()=>{ reset(); startGame(); });
+
+    function startGame(){ running = true; lastTick = 0; }
+
+  
+    reset();
+    requestAnimationFrame(loop);
+
+    
+    function fitCanvas(){
+      const max = Math.min(window.innerWidth - 320, window.innerHeight - 48, 720);
+      const size = Math.max(260, max);
+      canvas.style.width = size + 'px';
+      canvas.style.height = size + 'px';
+    }
+    window.addEventListener('resize', fitCanvas); fitCanvas();
+
+  </script>
+</body>
+</html>
